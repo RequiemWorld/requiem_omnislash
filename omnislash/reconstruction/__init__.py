@@ -1,0 +1,6 @@
+
+
+
+
+class ResourceScanResult:
+	pass
