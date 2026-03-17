@@ -73,7 +73,6 @@ class TestProgramRunnerStackComponentProvisioning(ProgramRunnerTestCase):
 
 	# this test fails and then plenty of others start failing after it.
 	def test_should_create_resource_and_execute_provisioning_code_after(self):
-		self.skipTest("breaks all other tests of running pulumi somehow")
 		def target_program():
 			def _write_to_the_files(component: StackComponent) -> None:
 				for file_resource in component.get_resources(FileResource):
