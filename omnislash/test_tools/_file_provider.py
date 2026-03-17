@@ -25,6 +25,6 @@ class FileProvider(ResourceProvider):
 
 
 class FileResource(BetterDynamicResource):
-	# output_path: pulumi.Output[str]
+	output_path: pulumi.Output[str]
 	def __init__(self, name: str, output_path: str):
 		super().__init__(FileProvider(), name, output_path=output_path)
