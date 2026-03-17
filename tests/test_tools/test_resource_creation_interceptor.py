@@ -66,7 +66,6 @@ class MyDynamicResource(dynamic.Resource):
 class TestResourceCreationInterceptorDynamicResources(ResourceCreationInterceptorTestCase):
 
 	def test_should_retrieve_arguments_passed_to_dynamic_resources(self):
-		self.skipTest("reason")
 		dynamic_resource_instance = MyDynamicResource("name", arbitrary_value="123")
 		info = self._interceptor.retrieve_creation_info_for_resource(dynamic_resource_instance)
 		self.assertIn("arbitrary_value", info.properties)
