@@ -13,9 +13,12 @@ from omnislash import setup_pulumi_workspace_options, StackProgramExecutor, Prog
 class RelevantResourceInfo:
 	resource_urn: str
 	resource_type: str
+	resource_outputs: dict
 	"""a string like random:index/randomId:RandomId"""
 
 
+
+ResourceType = type[pulumi.Resource]
 @dataclass
 class RelevantStackInfo:
 	resources: list[RelevantResourceInfo]
@@ -27,9 +30,16 @@ class RelevantStackInfo:
 			resource_dictionaries: list[dict] = stack_dictionary["checkpoint"]["latest"]["resources"]
 		resources = []
 		for resource_dictionary in resource_dictionaries:
-			resource = RelevantResourceInfo(resource_dictionary["urn"], resource_dictionary["type"])
+			resource = RelevantResourceInfo(resource_dictionary["urn"], resource_dictionary["type"], resource_dictionary.get("outputs", {}))
 			resources.append(resource)
 		return RelevantStackInfo(resources)
+
+	def find_resource_with_name_and_type(self, name: str, type_: ResourceType) -> RelevantResourceInfo | None:
+		resource_type_name = str(type_.__name__)
+		for resource in self.resources:
+			if resource.resource_type.endswith(resource_type_name) and resource.resource_urn.endswith(name):
+				return resource
+		return None
 
 
 class PulumiStateInspector:
@@ -38,6 +48,11 @@ class PulumiStateInspector:
 		:param stacks_directory: the one for the project_name like requiem_world.
 		"""
 		self._stacks_directory = stacks_directory
+
+	def get_resource_outputs(self, stack_name: str, resource_name: str, resource_type: ResourceType) -> dict | None:
+		stack_file_path = os.path.join(self._stacks_directory, stack_name + ".json")
+		stack_info = RelevantStackInfo.from_state_json_file(stack_file_path)
+		return stack_info.find_resource_with_name_and_type(resource_name, resource_type).resource_outputs
 
 	def assert_has_stack_with_name(self, stack_name: str):
 		stack_file_path = os.path.join(self._stacks_directory, stack_name + ".json")
@@ -51,13 +66,11 @@ class PulumiStateInspector:
 		else:
 			raise AssertionError(f"stack with name {stack_name} found")
 
-
 	def assert_stack_has_resource(self, stack_name: str, resource_name: str, resource_type: type[pulumi.Resource]):
 		"""
 		Asserts that the stack with the given name has a resource of the given type, anywhere inside of it, including
 		inside of components by checking the end of the urn e.g. urn:pulumi:my_stack::requiem_world::random:index/randomId:RandomId::server_one
 		"""
-
 		resource_type_name = str(resource_type.__name__)
 		stack_file_path = os.path.join(self._stacks_directory, stack_name + ".json")
 		stack_info = RelevantStackInfo.from_state_json_file(stack_file_path)
