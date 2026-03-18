@@ -13,10 +13,10 @@ def execute_function_in_new_process(function, *arguments):
 			result = deserialized_function(*arguments)
 		except Exception as e:
 			result = e
-		communication_queue.put(result)
+		communication_queue.put(dill.dumps(result))
 	process = Process(target=_execute_and_send_result_back)
 	process.start()
-	result = communication_queue.get()
+	result = dill.loads(communication_queue.get())
 	if isinstance(result, Exception):
 		raise result
 	process.kill()
