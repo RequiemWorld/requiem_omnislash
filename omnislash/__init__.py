@@ -108,7 +108,7 @@ class JSONSlashStateManager(SlashStateManager):
 		fields = {
 			"created_stack_names": state.existing_stack_names
 		}
-		with open(self._state_file_path) as f:
+		with open(self._state_file_path, "w") as f:
 			json.dump(fields, f, indent=4)
 
 
