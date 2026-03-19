@@ -2,7 +2,8 @@ import os
 import tempfile
 import unittest
 import pulumi
-from omnislash import setup_pulumi_workspace_options, StackProgramExecutor, ProgramRunner, FakeSlashStateManager
+from omnislash import setup_pulumi_workspace_options, StackProgramExecutor, ProgramRunner, FakeSlashStateManager, \
+	PulumiStateLoader
 from omnislash.automation import RelevantResourceInfo, ResourceType, RelevantStackInfo
 
 
@@ -12,6 +13,11 @@ class PulumiStateInspector:
 		:param stacks_directory: the one for the project_name like requiem_world.
 		"""
 		self._stacks_directory = stacks_directory
+
+	def get_resource(self, stack_name: str, resource_name: str, resource_type: ResourceType) -> RelevantResourceInfo | None:
+		stack_file_path = os.path.join(self._stacks_directory, stack_name + ".json")
+		stack_info = RelevantStackInfo.from_state_json_file(stack_file_path)
+		return stack_info.find_resource_with_name_and_type(resource_name, resource_type)
 
 	def get_resource_outputs(self, stack_name: str, resource_name: str, resource_type: ResourceType) -> dict | None:
 		stack_file_path = os.path.join(self._stacks_directory, stack_name + ".json")
@@ -56,6 +62,6 @@ class ProgramRunnerTestCase(unittest.TestCase):
 			environment_variables={})
 		stack_executor = StackProgramExecutor(workspace)
 		self._slash_state_manager = FakeSlashStateManager()
-		self._program_executor = ProgramRunner(stack_executor, self._slash_state_manager)
 		self._project_stacks_directory_path = os.path.join(self._temp_directory.name, ".pulumi", "stacks", workspace.project_settings.name)
+		self._program_executor = ProgramRunner(stack_executor, self._slash_state_manager, PulumiStateLoader(self._project_stacks_directory_path))
 		self._state_inspector = PulumiStateInspector(self._project_stacks_directory_path)

@@ -9,6 +9,8 @@ from ._reconstruction import PulumiResourceMaterializer
 from ._pulumi_state import ResourceType
 from ._pulumi_state import RelevantStackInfo
 from ._pulumi_state import RelevantResourceInfo
+from ._pulumi_state import PulumiStateLoader
+from ._pulumi_state import RelevantPulumiState
 
 
 def setup_pulumi_workspace_options(

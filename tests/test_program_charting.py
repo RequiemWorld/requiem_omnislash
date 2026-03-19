@@ -35,3 +35,12 @@ class TestChartingStackComponentResourceCapture(unittest.TestCase):
 			component_one.add_resource(random_string)
 		component = _chart_program(target_program).stack_components[0]
 		self.assertEqual(4, component.created_resources[0].properties.get("length"))
+
+
+class TestChartingStackComponentProvisioners(unittest.TestCase):
+	def test_should_capture_very_simple_provisioner_callable(self):
+		def target_program():
+			stack_component = StackComponent("name123")
+			stack_component.add_provisioner(lambda component: component)
+		component = _chart_program(target_program).stack_components[0]
+		self.assertEqual("abc", component.provisioners[0]("abc"))

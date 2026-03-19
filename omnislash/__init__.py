@@ -1,18 +1,16 @@
 import abc
 import copy
 import json
-
 import pulumi
 from pulumi import Resource
-from typing import Any
 from typing import Self
-from typing import Generic
 from typing import TypeVar
 from typing import Callable
 from dataclasses import dataclass
-from .automation import StackProgramExecutor, ResourceCreationInterceptor
+from .automation import StackProgramExecutor, ResourceCreationInterceptor, PulumiResourceMaterializer
 from .automation import InterceptedCreationInfo
 from .automation import setup_pulumi_workspace_options
+from .automation import PulumiStateLoader
 from .processes import execute_function_in_new_process
 
 Provisioner = Callable[[Self], None]
@@ -41,6 +39,7 @@ class StackComponent:
 class StackComponentConstructionInfo:
 	name: str
 	created_resources: list[InterceptedCreationInfo]
+	provisioners: list[Provisioner]
 	# @staticmethod
 	# def from_stack_component(
 	# 		stack_component: StackComponent,
@@ -65,10 +64,11 @@ def _run_program_get_result(program) -> ProgramResult:
 	program()
 	stack_component_infos: list[StackComponentConstructionInfo] = []
 	for stack_component in StackComponent._created_stack_components:
+		provisioners = stack_component._added_provisioners.copy()
 		resource_construction_infos = []
 		for resource in stack_component._created_resources:
 			resource_construction_infos.append(interceptor.retrieve_creation_info_for_resource(resource))
-		stack_component_construction_info = StackComponentConstructionInfo(stack_component.name, resource_construction_infos)
+		stack_component_construction_info = StackComponentConstructionInfo(stack_component.name, resource_construction_infos, provisioners)
 		stack_component_infos.append(stack_component_construction_info)
 	return ProgramResult(stack_component_infos)
 
@@ -134,16 +134,17 @@ class FakeSlashStateManager(SlashStateManager):
 class ProgramRunner:
 	def __init__(self,
 				 program_executor: StackProgramExecutor,
-				 state_manager: SlashStateManager):
+				 slash_state_manager: SlashStateManager,
+				 pulumi_state_loader: PulumiStateLoader):
 		self._program_executor = program_executor
-		self._state_manager = state_manager
+		self._state_manager = slash_state_manager
+		self._pulumi_state_loader = pulumi_state_loader
 
 	def run_program(self, target_program: Callable) -> None:
 		try:
 			loaded_state = self._state_manager.load_state()
 		except Exception:
 			loaded_state = SlashState([])
-
 		result = _chart_program(target_program)
 		found_stack_component_names = [component.name for component in result.stack_components]
 		for stack_name in loaded_state.existing_stack_names:
@@ -158,4 +159,14 @@ class ProgramRunner:
 					new_resource = resource.target_class(resource.resource_name, **resource.properties)
 				# 	resource = resource
 			self._program_executor.bring_up(new_target, stack_component.name)
+			pulumi_state = self._pulumi_state_loader.load_pulumi_state(stack_component.name)
+			materializer = PulumiResourceMaterializer(pulumi_state)
+			def reconstruct_stack_component(creation_info: StackComponentConstructionInfo) -> StackComponent:
+				component = StackComponent(name=creation_info.name)
+				for resource_info in creation_info.created_resources:
+					reconstructed_resource = materializer.materialize_resource(creation_info.name, resource_info.resource_name, resource_info.target_class)
+					component.add_resource(reconstructed_resource)
+				return component
+			for provisioner in stack_component.provisioners:
+				provisioner(reconstruct_stack_component(stack_component))
 		self._state_manager.save_state(loaded_state)
