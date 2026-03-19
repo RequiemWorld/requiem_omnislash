@@ -67,7 +67,9 @@ def _run_program_get_result(program) -> ProgramResult:
 		provisioners = stack_component._added_provisioners.copy()
 		resource_construction_infos = []
 		for resource in stack_component._created_resources:
-			resource_construction_infos.append(interceptor.retrieve_creation_info_for_resource(resource))
+			retrieved_resource_info = interceptor.retrieve_creation_info_for_resource(resource)
+			assert retrieved_resource_info is not None, f"unable to retrieve creation info for resource {resource}"
+			resource_construction_infos.append(retrieved_resource_info)
 		stack_component_construction_info = StackComponentConstructionInfo(stack_component.name, resource_construction_infos, provisioners)
 		stack_component_infos.append(stack_component_construction_info)
 	return ProgramResult(stack_component_infos)
