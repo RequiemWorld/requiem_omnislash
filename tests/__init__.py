@@ -65,3 +65,38 @@ class ProgramRunnerTestCase(unittest.TestCase):
 		self._project_stacks_directory_path = os.path.join(self._temp_directory.name, ".pulumi", "stacks", workspace.project_settings.name)
 		self._program_executor = ProgramRunner(stack_executor, self._slash_state_manager, PulumiStateLoader(self._project_stacks_directory_path))
 		self._state_inspector = PulumiStateInspector(self._project_stacks_directory_path)
+
+
+class TestFixture:
+	def __init__(self):
+		super().__init__()
+		self.setUp()
+
+	def __del__(self):
+		self.tearDown()
+
+	def setUp(self):
+		pass
+
+	def tearDown(self):
+		pass
+
+
+class ViableFileFixture(TestFixture):
+	"""
+	A fixture to create a temporary directory and provide a file
+	that can be written to for testing.
+	"""
+	def setUp(self):
+		self._storage_temp_directory = tempfile.TemporaryDirectory()
+		self.viable_one_off_path = os.path.join(self._storage_temp_directory.name, "some_file")
+
+	def tearDown(self):
+		self._storage_temp_directory.cleanup()
+
+	def assertFileCreated(self):
+		assert os.path.exists(self.viable_one_off_path)
+
+	def assertFileContents(self, contents: str) -> None:
+		with open(self.viable_one_off_path) as f:
+			assert contents == f.read()

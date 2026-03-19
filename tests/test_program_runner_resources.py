@@ -2,7 +2,7 @@ import os.path
 import tempfile
 from pulumi_random import RandomString
 from omnislash.test_tools import FileResource
-from . import ProgramRunnerTestCase
+from . import ProgramRunnerTestCase, ViableFileFixture
 from omnislash import StackComponent
 
 
@@ -59,41 +59,6 @@ class TestProgramRunnerStackCleanUp(ProgramRunnerTestCase):
 		self._program_executor.run_program(emptied_program)
 		assert not os.path.exists(viable_file_path)
 		self._state_inspector.assert_has_no_stack_with_name("some_stack")
-
-
-class TestFixture:
-	def __init__(self):
-		super().__init__()
-		self.setUp()
-
-	def __del__(self):
-		self.tearDown()
-
-	def setUp(self):
-		pass
-
-	def tearDown(self):
-		pass
-
-
-class ViableFileFixture(TestFixture):
-	"""
-	A fixture to create a temporary directory and provide a file
-	that can be written to for testing.
-	"""
-	def setUp(self):
-		self._storage_temp_directory = tempfile.TemporaryDirectory()
-		self.viable_one_off_path = os.path.join(self._storage_temp_directory.name, "some_file")
-
-	def tearDown(self):
-		self._storage_temp_directory.cleanup()
-
-	def assertFileCreated(self):
-		assert os.path.exists(self.viable_one_off_path)
-
-	def assertFileContents(self, contents: str) -> None:
-		with open(self.viable_one_off_path) as f:
-			assert contents == f.read()
 
 
 class TestProgramRunnerStackComponentProvisioning(ProgramRunnerTestCase):
