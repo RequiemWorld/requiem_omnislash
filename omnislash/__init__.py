@@ -56,14 +56,32 @@ class ProgramResult:
 	stack_components: list[StackComponentConstructionInfo]
 
 
+class _StackComponentCreationInterceptor:
+	def __init__(self):
+		self.__original_constructor = None
+		self.__captured_components: list[StackComponent] = list()
+
+	def replace_constructor(self, clazz: type[StackComponent]):
+		self.__original_constructor = clazz.__init__
+		def replacement_constructor(other_self, *args, **kwargs) -> None:
+			self.__original_constructor(other_self, *args, **kwargs)
+			self.__captured_components.append(other_self)
+		clazz.__init__ = replacement_constructor
+
+	def retrieve_components(self) -> list[StackComponent]:
+		return self.__captured_components.copy()
+
+
 # TODO turn this into a public function and test it in isolation
 def _run_program_get_result(program) -> ProgramResult:
 	# need to replace the resource constructor so that props can be captured and logged
 	interceptor = ResourceCreationInterceptor()
 	interceptor.replace_resource_constructor(Resource)
+	stack_component_interceptor = _StackComponentCreationInterceptor()
+	stack_component_interceptor.replace_constructor(StackComponent)
 	program()
 	stack_component_infos: list[StackComponentConstructionInfo] = []
-	for stack_component in StackComponent._created_stack_components:
+	for stack_component in stack_component_interceptor.retrieve_components():
 		provisioners = stack_component._added_provisioners.copy()
 		resource_construction_infos = []
 		for resource in stack_component._created_resources:

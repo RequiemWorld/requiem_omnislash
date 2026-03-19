@@ -44,3 +44,14 @@ class TestChartingStackComponentProvisioners(unittest.TestCase):
 			stack_component.add_provisioner(lambda component: component)
 		component = _chart_program(target_program).stack_components[0]
 		self.assertEqual("abc", component.provisioners[0]("abc"))
+
+
+class TestChartingStackComponentsAfterExternalCreation(unittest.TestCase):
+
+	def test_should_not_capture_stack_components_created_outside_of_charting_code(self):
+		bad_stack_component = StackComponent("bad_one")
+		def target_program():
+			good_stack_component = StackComponent("good_one")
+		components = _chart_program(target_program).stack_components
+		for component in components:
+			self.assertNotEqual("bad_one", component.name)
