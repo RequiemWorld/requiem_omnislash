@@ -99,4 +99,5 @@ class ViableFileFixture(TestFixture):
 
 	def assertFileContents(self, contents: str) -> None:
 		with open(self.viable_one_off_path) as f:
-			assert contents == f.read()
+			content_read = f.read()
+			assert contents == content_read, f"got '{content_read}' and not '{contents}' "
