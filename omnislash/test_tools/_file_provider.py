@@ -15,7 +15,10 @@ class FileProvider(ResourceProvider):
 	def create(self, props: dict[str, Any]) -> CreateResult:
 		output_path = props["output_path"]
 		with open(output_path, "w") as f:
-			pass
+			content = props.get("content")
+			if content is not None:
+				f.write(content)
+
 		return CreateResult(id_=output_path, outs={"output_path": output_path})
 
 	def delete(self, _id: str, _props: dict[str, Any]) -> None:
@@ -26,5 +29,6 @@ class FileProvider(ResourceProvider):
 
 class FileResource(BetterDynamicResource):
 	output_path: pulumi.Output[str]
-	def __init__(self, name: str, output_path: str):
-		super().__init__(FileProvider(), name, output_path=output_path)
+	def __init__(self, name: str, output_path: str, content: str = ""):
+		super().__init__(FileProvider(), name, output_path=output_path, content=content)
+
