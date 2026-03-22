@@ -7,7 +7,7 @@ from typing import Self
 from typing import TypeVar
 from typing import Callable
 from dataclasses import dataclass
-from .automation import StackProgramExecutor, ResourceCreationInterceptor, PulumiResourceMaterializer
+from .automation import StackProgramExecutor, ResourceCreationInterceptor, PulumiResourceMaterializer, RequiredOutput
 from .automation import InterceptedCreationInfo
 from .automation import setup_pulumi_workspace_options
 from .automation import PulumiStateLoader
@@ -76,7 +76,7 @@ class _StackComponentCreationInterceptor:
 def _run_program_get_result(program) -> ProgramResult:
 	# need to replace the resource constructor so that props can be captured and logged
 	interceptor = ResourceCreationInterceptor()
-	interceptor.replace_resource_constructor(Resource)
+	interceptor.replace_resource_constructor_and_get(Resource)
 	stack_component_interceptor = _StackComponentCreationInterceptor()
 	stack_component_interceptor.replace_constructor(StackComponent)
 	program()
@@ -175,8 +175,19 @@ class ProgramRunner:
 		for stack_component in result.stack_components:
 			loaded_state.existing_stack_names.append(stack_component.name)
 			def new_target():
+				resource_map: dict[tuple[type[Resource], str], Resource] = dict()
 				for resource in stack_component.created_resources:
-					new_resource = resource.target_class(resource.resource_name, **resource.properties)
+					transformed_properties = {}
+					for property_name, property_value in resource.properties.items():
+						if type(property_value) is RequiredOutput:
+							resource_with_output = resource_map.get((property_value.target_class, property_value.resource_name))
+							output = getattr(resource_with_output, property_value.attribute_name)
+							assert type(output) is pulumi.Output
+							transformed_properties[property_name] = output
+						else:
+							transformed_properties[property_name] = property_value
+					new_resource = resource.target_class(resource.resource_name, **transformed_properties)
+					resource_map[(resource.target_class, resource.resource_name)] = new_resource
 				# 	resource = resource
 			self._program_executor.bring_up(new_target, stack_component.name)
 			pulumi_state = self._pulumi_state_loader.load_pulumi_state(stack_component.name)

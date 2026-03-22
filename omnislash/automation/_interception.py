@@ -1,4 +1,5 @@
 import inspect
+import typing
 import pulumi
 from pulumi import Resource
 from pulumi.dynamic import Resource as DynamicResource
@@ -22,15 +23,55 @@ class RequiredOutput:
 	"""the name of the attribute to access on the target class/instance to get the output in rebuilding."""
 
 
-
 @dataclass
 class InterceptedCreationInfo:
 	# name: str
 	# properties: dict[str, str]
 	target_class: type[Resource]
 	resource_name: str
-	properties: dict
+	properties: dict[typing.Any | RequiredOutput]
 	# provisioners: list[]
+
+
+class _OutputInterceptor:
+	def __init__(self):
+		self._output_map: dict[pulumi.Output, RequiredOutput] = {}
+		self._original_get = None
+
+	def __del__(self):
+		pulumi.get = self._original_get
+
+	def replace_pulumi_get_function(self):
+		self._original_get = pulumi.get
+		def replacement_get(other_self, output_name) -> pulumi.Output:
+			target_class: type[Resource] = type(other_self)
+			resource_name = other_self._name
+			attribute_name = output_name
+			output_object = self._original_get(other_self, output_name)
+			self._output_map[output_object] = RequiredOutput(target_class, resource_name, attribute_name)
+			return output_object
+		pulumi.get = replacement_get
+
+	def find_info_for_output(self, output: pulumi.Output) -> RequiredOutput | None:
+		return self._output_map.get(output)
+
+
+def _transform_properties(properties: dict, output_interceptor: _OutputInterceptor) -> dict:
+	"""
+	:raises ValueError: When there is an output in the properties and info for it can't be found.
+	"""
+	transformed_version = properties.copy()
+	for property_name, property_value in properties.items():
+		if property_name == "__provider":
+			continue
+		if isinstance(property_value, pulumi.Output):
+			value = output_interceptor.find_info_for_output(property_value)
+			if value is None:
+				raise ValueError(f"something is wrong with these properties, output info for {property_value} not found.")
+			transformed_version[property_name] = value
+		else:
+			transformed_version[property_name] = property_value
+	return transformed_version
 
 
 class ResourceCreationInterceptor:
@@ -42,19 +83,22 @@ class ResourceCreationInterceptor:
 		self.__original_constructor = None
 		self.__resource_to_creation_info_map: dict[Resource, InterceptedCreationInfo] = dict()
 
-	def replace_resource_constructor(self, resource_class: type[Resource]):
+	def replace_resource_constructor_and_get(self, resource_class: type[Resource]):
+		output_interceptor = _OutputInterceptor()
+		output_interceptor.replace_pulumi_get_function()
 		self.__original_constructor = Resource.__init__
 		interceptor_instance = self
 		def replacement_constructor(self, type_, name: str, custom, props, *args, **kwargs):
 			# note to self: the constructors of the target class should be available for inspection through self
 			target_class = type(self)
+			interceptor_instance.__original_constructor(self, type_, name, custom, props, *args, **kwargs)
 			if issubclass(target_class, DynamicResource):
 				properties_dictionary = props
 				parameter_names_for_resource = read_available_parameter_names_for_dynamic_resource_class(target_class)
 			else:
 				properties_dictionary = props.__dict__
 				parameter_names_for_resource = read_available_parameter_names_for_resource_class(target_class)
-
+			properties_dictionary = _transform_properties(properties_dictionary, output_interceptor)
 			# can't iterate through the original dictionary keys while modifying them.
 			for property_name in [key for key in properties_dictionary]:
 				if property_name not in parameter_names_for_resource:

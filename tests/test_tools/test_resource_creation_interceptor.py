@@ -8,12 +8,13 @@ from pulumi.dynamic import CreateResult
 from pulumi_random import RandomString
 from omnislash import StackComponent
 from omnislash.automation import ResourceCreationInterceptor
+from omnislash.test_tools import FileResource
 
 
 class ResourceCreationInterceptorTestCase(unittest.TestCase):
 	def setUp(self):
 		self._interceptor = ResourceCreationInterceptor()
-		self._interceptor.replace_resource_constructor(pulumi.Resource)
+		self._interceptor.replace_resource_constructor_and_get(pulumi.Resource)
 
 
 class TestResourceCreationInterceptor(ResourceCreationInterceptorTestCase):
@@ -43,7 +44,7 @@ class TestResourceCreationInterceptor(ResourceCreationInterceptorTestCase):
 		resource_mock = create_autospec(pulumi.Resource)
 		random_string = RandomString("a_resource_name", length=4)
 		fresh_instance = ResourceCreationInterceptor()
-		fresh_instance.replace_resource_constructor(resource_mock)
+		fresh_instance.replace_resource_constructor_and_get(resource_mock)
 		self.assertIsNone(fresh_instance.retrieve_creation_info_for_resource(random_string))
 
 	def test_should_retrieve_properties_as_a_dictionary(self):
@@ -70,3 +71,24 @@ class TestResourceCreationInterceptorDynamicResources(ResourceCreationIntercepto
 		info = self._interceptor.retrieve_creation_info_for_resource(dynamic_resource_instance)
 		self.assertIn("arbitrary_value", info.properties)
 		self.assertEqual("123", info.properties["arbitrary_value"])
+
+
+class TestResourceCreationInterceptorRequiredOutputs(ResourceCreationInterceptorTestCase):
+	def test_should_retrieve_required_output_resource_name_as_expected(self):
+		resource_one = RandomString("string555", length=4)
+		resource_two = FileResource(name="123", output_path="./arbitrary_path", content=resource_one.result)
+		info = self._interceptor.retrieve_creation_info_for_resource(resource_two)
+		self.assertEqual("string555", info.properties["content"].resource_name)
+
+	def test_should_retrieve_required_output_attribute_name_as_expected(self):
+		resource_one = RandomString("string555", length=4)
+		resource_two = FileResource(name="123", output_path="./arbitrary_path", content=resource_one.result)
+		info = self._interceptor.retrieve_creation_info_for_resource(resource_two)
+		self.assertEqual("result", info.properties["content"].attribute_name)
+
+	def test_should_retrieve_required_output_target_class_as_expected(self):
+		resource_one = RandomString("string555", length=4)
+		resource_two = FileResource(name="123", output_path="./arbitrary_path", content=resource_one.result)
+		info = self._interceptor.retrieve_creation_info_for_resource(resource_two)
+		self.assertIs(RandomString, info.properties["content"].target_class)
+

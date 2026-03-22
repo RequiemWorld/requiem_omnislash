@@ -3,6 +3,7 @@ from pulumi.automation import ProjectBackend
 from pulumi.automation import select_stack, create_or_select_stack
 from pulumi.automation import ProjectSettings
 from pulumi.automation import LocalWorkspaceOptions
+from ._interception import RequiredOutput
 from ._interception import InterceptedCreationInfo
 from ._interception import ResourceCreationInterceptor
 from ._reconstruction import PulumiResourceMaterializer
