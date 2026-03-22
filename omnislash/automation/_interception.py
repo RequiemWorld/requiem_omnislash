@@ -12,6 +12,16 @@ def read_available_parameter_names_for_resource_class(resource: type[pulumi.Reso
 	return list(inspect.signature(resource._internal_init).parameters.keys())
 
 
+@dataclass
+class RequiredOutput:
+	target_class: type[Resource]
+	"""the class that the output came from/has to exist for access to this"""
+	resource_name: str
+	"""the name of the resource that comes from the target class, containing the output."""
+	attribute_name: str
+	"""the name of the attribute to access on the target class/instance to get the output in rebuilding."""
+
+
 
 @dataclass
 class InterceptedCreationInfo:
