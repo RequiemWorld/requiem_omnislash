@@ -1,7 +1,7 @@
 import unittest
 from pulumi_random import RandomString
-from omnislash import _chart_program, RequiredOutput
 from omnislash import StackComponent
+from omnislash import _chart_program, RequiredOutput
 from omnislash.test_tools import FileResource
 from tests import ViableFileFixture
 

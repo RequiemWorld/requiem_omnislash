@@ -1,7 +1,6 @@
 import unittest
 import pulumi_random
-from omnislash import _chart_program
-from omnislash import StackComponent
+from omnislash import _chart_program, StackComponent
 
 
 class TestChartingStackComponentCapture(unittest.TestCase):
