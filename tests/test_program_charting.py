@@ -1,6 +1,9 @@
 import unittest
 import pulumi_random
+from pulumi_random import RandomString
 from omnislash import _chart_program, StackComponent
+from omnislash.framework import StackComponentValueReference
+from omnislash.test_tools import FileResource
 
 
 class TestChartingStackComponentCapture(unittest.TestCase):
@@ -54,3 +57,21 @@ class TestChartingStackComponentsAfterExternalCreation(unittest.TestCase):
 		components = _chart_program(target_program).stack_components
 		for component in components:
 			self.assertNotEqual("bad_one", component.name)
+
+
+class TestChartingStackComponentValueReferences(unittest.TestCase):
+	def test_should_capture_references_to_values_on_other_stack_components_in_resources(self):
+		def target_program():
+			stack_component_one = StackComponent("abc")
+			stack_component_one.add_resource(RandomString("string", length=4))
+			reference = stack_component_one.get_reference(RandomString, "string", "result")
+			stack_component_two = StackComponent("efg")
+			stack_component_two.add_resource(FileResource("name", "/wherever", content=reference))
+
+		component_two_info = _chart_program(target_program).stack_components[1]
+		reference: StackComponentValueReference = component_two_info.created_resources[0].properties["content"]
+		self.assertIsInstance(reference, StackComponentValueReference)
+		self.assertEqual("abc", reference.stack_name)
+		self.assertIs(RandomString, reference.resource_type)
+		self.assertEqual("string", reference.resource_name)
+		self.assertEqual("result", reference.property_name)

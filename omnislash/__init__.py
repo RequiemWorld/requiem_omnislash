@@ -5,7 +5,7 @@ import pulumi
 from pulumi import Resource
 from typing import Callable
 from dataclasses import dataclass
-from .framework import StackComponent
+from .framework import StackComponent, StackComponentValueReference
 from .automation import StackProgramExecutor, ResourceCreationInterceptor, PulumiResourceMaterializer, RequiredOutput
 from .automation import InterceptedCreationInfo
 from .automation import setup_pulumi_workspace_options
@@ -163,6 +163,14 @@ class ProgramRunner:
 							output = getattr(resource_with_output, property_value.attribute_name)
 							assert type(output) is pulumi.Output
 							transformed_properties[property_name] = output
+						elif type(property_value) is StackComponentValueReference:
+							reference: StackComponentValueReference = property_value
+							referenced_stack_state = self._pulumi_state_loader.load_pulumi_state(reference.stack_name).stacks[reference.stack_name]
+							resource_state = referenced_stack_state.find_resource_with_name_and_type(
+								name=reference.resource_name,
+								type_=reference.resource_type)
+							value_being_pointed_to = resource_state.resource_outputs[reference.property_name]
+							transformed_properties[property_name] = value_being_pointed_to
 						else:
 							transformed_properties[property_name] = property_value
 					new_resource = resource.target_class(resource.resource_name, **transformed_properties)

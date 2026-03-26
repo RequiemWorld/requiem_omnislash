@@ -4,7 +4,7 @@ import pulumi
 from pulumi import Resource
 from pulumi.dynamic import Resource as DynamicResource
 from dataclasses import dataclass
-
+from ..framework import StackComponentValueReference
 
 def read_available_parameter_names_for_dynamic_resource_class(resource: type[DynamicResource]):
 	return list(inspect.signature(resource.__init__).parameters.keys())
@@ -29,7 +29,8 @@ class InterceptedCreationInfo:
 	# properties: dict[str, str]
 	target_class: type[Resource]
 	resource_name: str
-	properties: dict[typing.Any | RequiredOutput]
+	properties: dict[typing.Any, RequiredOutput | StackComponentValueReference]
+
 	# provisioners: list[]
 
 
