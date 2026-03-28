@@ -143,8 +143,10 @@ class FakeSuperStateManager(SuperStateManager):
 class _ComponentLifecycleHandler:
 	def __init__(self,
 				 working_state: SuperState,
+				 state_manager: SuperStateManager,
 				 program_executor: StackProgramExecutor):
 		self._working_state = working_state
+		self._state_manager = state_manager
 		self._program_executor = program_executor
 
 	def handle_component_cleanup(self, current_components: list[StackComponentConstructionInfo]) -> None:
@@ -155,10 +157,11 @@ class _ComponentLifecycleHandler:
 		def empty_program() -> None:
 			pass
 		found_stack_component_names = [component.name for component in current_components]
-		for managed_stack in self._working_state.managed_stacks:
+		for managed_stack in self._working_state.managed_stacks.copy():
 			if managed_stack.name not in found_stack_component_names:
 				self._program_executor.tear_down(empty_program, managed_stack.name)
-
+				self._working_state.managed_stacks.remove(managed_stack)
+				self._state_manager.save_state(self._working_state)
 
 class ProgramRunner:
 	def __init__(self,
@@ -176,6 +179,7 @@ class ProgramRunner:
 			loaded_state = SuperState([])
 		component_lifecycle_handler = _ComponentLifecycleHandler(
 			working_state=loaded_state,
+			state_manager=self._state_manager,
 			program_executor=self._program_executor)
 		result = _chart_program(target_program)
 		component_lifecycle_handler.handle_component_cleanup(result.stack_components)
