@@ -81,8 +81,9 @@ class ManagedStack:
 
 
 class SuperState:
-	def __init__(self, existing_stack_names: list[str]):
-		self.existing_stack_names = existing_stack_names
+
+	def __init__(self, managed_stacks: list[ManagedStack]):
+		self.managed_stacks = managed_stacks
 
 
 class SuperStateManager(abc.ABC):
@@ -150,13 +151,13 @@ class ProgramRunner:
 			loaded_state = SuperState([])
 		result = _chart_program(target_program)
 		found_stack_component_names = [component.name for component in result.stack_components]
-		for stack_name in loaded_state.existing_stack_names:
-			if stack_name not in found_stack_component_names:
+		for managed_stack in loaded_state.managed_stacks:
+			if managed_stack.primary_name not in found_stack_component_names:
 				def empty_target():
 					pass
-				self._program_executor.tear_down(empty_target, stack_name)
+				self._program_executor.tear_down(empty_target, managed_stack.primary_name)
 		for stack_component in result.stack_components:
-			loaded_state.existing_stack_names.append(stack_component.name)
+			loaded_state.managed_stacks.append(ManagedStack(primary_name=stack_component.name))
 			def new_target():
 				resource_map: dict[tuple[type[Resource], str], Resource] = dict()
 				for resource in stack_component.created_resources:
