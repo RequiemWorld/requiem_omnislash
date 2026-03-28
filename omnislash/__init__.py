@@ -81,7 +81,7 @@ class SuperState:
 		self.existing_stack_names = existing_stack_names
 
 
-class SlashStateManager(abc.ABC):
+class SuperStateManager(abc.ABC):
 
 	@abc.abstractmethod
 	def load_state(self) -> SuperState:
@@ -92,7 +92,7 @@ class SlashStateManager(abc.ABC):
 		raise NotImplementedError
 
 
-class JSONSlashStateManager(SlashStateManager):
+class JSONSuperStateManager(SuperStateManager):
 	def __init__(self, state_file_path: str):
 		self._state_file_path = state_file_path
 
@@ -109,7 +109,7 @@ class JSONSlashStateManager(SlashStateManager):
 			json.dump(fields, f, indent=4)
 
 
-class FakeSlashStateManager(SlashStateManager):
+class FakeSuperStateManager(SuperStateManager):
 
 	def __init__(self):
 		self._saved_state: SuperState | None = None
@@ -133,7 +133,7 @@ class FakeSlashStateManager(SlashStateManager):
 class ProgramRunner:
 	def __init__(self,
 				 program_executor: StackProgramExecutor,
-				 slash_state_manager: SlashStateManager,
+				 slash_state_manager: SuperStateManager,
 				 pulumi_state_loader: PulumiStateLoader):
 		self._program_executor = program_executor
 		self._state_manager = slash_state_manager

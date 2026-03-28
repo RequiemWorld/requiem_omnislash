@@ -2,7 +2,7 @@ import os
 import tempfile
 import unittest
 import pulumi
-from omnislash import setup_pulumi_workspace_options, StackProgramExecutor, ProgramRunner, FakeSlashStateManager, \
+from omnislash import setup_pulumi_workspace_options, StackProgramExecutor, ProgramRunner, FakeSuperStateManager, \
 	PulumiStateLoader
 from omnislash.automation import RelevantResourceInfo, ResourceType, RelevantStackInfo
 
@@ -61,7 +61,7 @@ class ProgramRunnerTestCase(unittest.TestCase):
 			secret_passphrase="12345",
 			environment_variables={})
 		stack_executor = StackProgramExecutor(workspace)
-		self._slash_state_manager = FakeSlashStateManager()
+		self._slash_state_manager = FakeSuperStateManager()
 		self._project_stacks_directory_path = os.path.join(self._temp_directory.name, ".pulumi", "stacks", workspace.project_settings.name)
 		self._program_executor = ProgramRunner(stack_executor, self._slash_state_manager, PulumiStateLoader(self._project_stacks_directory_path))
 		self._state_inspector = PulumiStateInspector(self._project_stacks_directory_path)
