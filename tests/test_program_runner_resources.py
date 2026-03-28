@@ -29,8 +29,8 @@ class TestProgramRunnerStateResilience(ProgramRunnerTestCase):
 		def target_program():
 			some_component = StackComponent("my_stack")
 		self._program_executor.run_program(target_program)
-		self._slash_state_manager.assert_state_saved()
-		self._slash_state_manager.assert_failed_to_load_at_least_once()
+		self._super_state_manager.assert_state_saved()
+		self._super_state_manager.assert_failed_to_load_at_least_once()
 
 
 class TestProgramRunnerStackCleanUp(ProgramRunnerTestCase):
