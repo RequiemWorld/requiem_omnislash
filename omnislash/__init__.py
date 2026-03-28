@@ -119,6 +119,11 @@ class FakeSuperStateManager(SuperStateManager):
 	def __init__(self):
 		self._saved_state: SuperState | None = None
 		self._failed_to_load_at_least_once = False
+
+	@property
+	def saved_state(self) -> SuperState | None:
+		return self._saved_state
+
 	def load_state(self) -> SuperState:
 		if self._saved_state is None:
 			self._failed_to_load_at_least_once = True
