@@ -135,6 +135,26 @@ class FakeSuperStateManager(SuperStateManager):
 		assert self._failed_to_load_at_least_once
 
 
+class _ComponentLifecycleHandler:
+	def __init__(self,
+				 working_state: SuperState,
+				 program_executor: StackProgramExecutor):
+		self._working_state = working_state
+		self._program_executor = program_executor
+
+	def handle_component_cleanup(self, current_components: list[StackComponentConstructionInfo]) -> None:
+		"""
+		Takes every component for the current program, and destroys any that
+		aren't in the state from the last ones.
+		"""
+		def empty_program() -> None:
+			pass
+		found_stack_component_names = [component.name for component in current_components]
+		for managed_stack in self._working_state.managed_stacks:
+			if managed_stack.name not in found_stack_component_names:
+				self._program_executor.tear_down(empty_program, managed_stack.name)
+
+
 class ProgramRunner:
 	def __init__(self,
 				 program_executor: StackProgramExecutor,
@@ -149,13 +169,11 @@ class ProgramRunner:
 			loaded_state = self._state_manager.load_state()
 		except Exception:
 			loaded_state = SuperState([])
+		component_lifecycle_handler = _ComponentLifecycleHandler(
+			working_state=loaded_state,
+			program_executor=self._program_executor)
 		result = _chart_program(target_program)
-		found_stack_component_names = [component.name for component in result.stack_components]
-		for managed_stack in loaded_state.managed_stacks:
-			if managed_stack.name not in found_stack_component_names:
-				def empty_target():
-					pass
-				self._program_executor.tear_down(empty_target, managed_stack.name)
+		component_lifecycle_handler.handle_component_cleanup(result.stack_components)
 		for stack_component in result.stack_components:
 			loaded_state.managed_stacks.append(ManagedStack(name=stack_component.name))
 			def new_target():
