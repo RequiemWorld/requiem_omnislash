@@ -1,0 +1,25 @@
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  # it's integration test driven by nature. There's also unit tests.
+  run-mixed-test-suite:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Checkout Repository"
+        uses: actions/checkout@v5
+      - name: "Install Pulumi for integration tests"
+        uses: pulumi/actions@v4
+        with:
+          # version I've been developing against locally
+          pulumi-version: 3.225.1
+      - name: "Install Python"
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.13
+      - name: "Install tox for running test suite"
+        run: pip install tox
+      - name: "run test suite with tox"
+        uses: tox run -e python313
