@@ -76,7 +76,7 @@ def _chart_program(target_program) -> ProgramResult:
 	return execute_function_in_new_process(_run_program_get_result, target_program)
 
 
-class SlashState:
+class SuperState:
 	def __init__(self, existing_stack_names: list[str]):
 		self.existing_stack_names = existing_stack_names
 
@@ -84,11 +84,11 @@ class SlashState:
 class SlashStateManager(abc.ABC):
 
 	@abc.abstractmethod
-	def load_state(self) -> SlashState:
+	def load_state(self) -> SuperState:
 		raise NotImplementedError
 
 	@abc.abstractmethod
-	def save_state(self, state: SlashState):
+	def save_state(self, state: SuperState):
 		raise NotImplementedError
 
 
@@ -96,12 +96,12 @@ class JSONSlashStateManager(SlashStateManager):
 	def __init__(self, state_file_path: str):
 		self._state_file_path = state_file_path
 
-	def load_state(self) -> SlashState:
+	def load_state(self) -> SuperState:
 		with open(self._state_file_path) as f:
 			fields = json.load(f)
-		return SlashState(fields["existing_stack_names"])
+		return SuperState(fields["existing_stack_names"])
 
-	def save_state(self, state: SlashState):
+	def save_state(self, state: SuperState):
 		fields = {
 			"created_stack_names": state.existing_stack_names
 		}
@@ -112,15 +112,15 @@ class JSONSlashStateManager(SlashStateManager):
 class FakeSlashStateManager(SlashStateManager):
 
 	def __init__(self):
-		self._saved_state: SlashState | None = None
+		self._saved_state: SuperState | None = None
 		self._failed_to_load_at_least_once = False
-	def load_state(self) -> SlashState:
+	def load_state(self) -> SuperState:
 		if self._saved_state is None:
 			self._failed_to_load_at_least_once = True
 			raise Exception
 		return copy.deepcopy(self._saved_state)
 
-	def save_state(self, state: SlashState) -> None:
+	def save_state(self, state: SuperState) -> None:
 		self._saved_state = copy.deepcopy(state)
 
 	def assert_state_saved(self):
@@ -143,7 +143,7 @@ class ProgramRunner:
 		try:
 			loaded_state = self._state_manager.load_state()
 		except Exception:
-			loaded_state = SlashState([])
+			loaded_state = SuperState([])
 		result = _chart_program(target_program)
 		found_stack_component_names = [component.name for component in result.stack_components]
 		for stack_name in loaded_state.existing_stack_names:
