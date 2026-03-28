@@ -22,4 +22,4 @@ jobs:
       - name: "Install tox for running test suite"
         run: pip install tox
       - name: "run test suite with tox"
-        uses: tox run -e python313
+        run: tox run -e python313
