@@ -77,7 +77,7 @@ def _chart_program(target_program) -> ProgramResult:
 
 @dataclass
 class ManagedStack:
-	primary_name: str
+	name: str
 
 
 class SuperState:
@@ -152,12 +152,12 @@ class ProgramRunner:
 		result = _chart_program(target_program)
 		found_stack_component_names = [component.name for component in result.stack_components]
 		for managed_stack in loaded_state.managed_stacks:
-			if managed_stack.primary_name not in found_stack_component_names:
+			if managed_stack.name not in found_stack_component_names:
 				def empty_target():
 					pass
-				self._program_executor.tear_down(empty_target, managed_stack.primary_name)
+				self._program_executor.tear_down(empty_target, managed_stack.name)
 		for stack_component in result.stack_components:
-			loaded_state.managed_stacks.append(ManagedStack(primary_name=stack_component.name))
+			loaded_state.managed_stacks.append(ManagedStack(name=stack_component.name))
 			def new_target():
 				resource_map: dict[tuple[type[Resource], str], Resource] = dict()
 				for resource in stack_component.created_resources:
