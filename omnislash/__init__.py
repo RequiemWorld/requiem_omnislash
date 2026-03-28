@@ -75,6 +75,10 @@ def _run_program_get_result(program) -> ProgramResult:
 def _chart_program(target_program) -> ProgramResult:
 	return execute_function_in_new_process(_run_program_get_result, target_program)
 
+@dataclass
+class ManagedStack:
+	primary_name: str
+
 
 class SuperState:
 	def __init__(self, existing_stack_names: list[str]):
