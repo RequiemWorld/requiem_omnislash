@@ -144,10 +144,12 @@ class _ComponentLifecycleHandler:
 	def __init__(self,
 				 working_state: SuperState,
 				 state_manager: SuperStateManager,
-				 program_executor: StackProgramExecutor):
+				 program_executor: StackProgramExecutor,
+				 pulumi_state_loader: PulumiStateLoader):
 		self._working_state = working_state
 		self._state_manager = state_manager
 		self._program_executor = program_executor
+		self._pulumi_state_loader = pulumi_state_loader
 
 	def handle_component_cleanup(self, current_components: list[StackComponentConstructionInfo]) -> None:
 		"""
@@ -162,6 +164,45 @@ class _ComponentLifecycleHandler:
 				self._program_executor.tear_down(empty_program, managed_stack.name)
 				self._working_state.managed_stacks.remove(managed_stack)
 				self._state_manager.save_state(self._working_state)
+
+	def handle_component_lifecycle(self, component: StackComponentConstructionInfo) -> None:
+		def new_target():
+			resource_map: dict[tuple[type[Resource], str], Resource] = dict()
+			for resource in component.created_resources:
+				transformed_properties = {}
+				for property_name, property_value in resource.properties.items():
+					if type(property_value) is RequiredOutput:
+						resource_with_output = resource_map.get(
+							(property_value.target_class, property_value.resource_name))
+						output = getattr(resource_with_output, property_value.attribute_name)
+						assert type(output) is pulumi.Output
+						transformed_properties[property_name] = output
+					elif type(property_value) is StackComponentValueReference:
+						reference: StackComponentValueReference = property_value
+						referenced_stack_state = \
+						self._pulumi_state_loader.load_pulumi_state(reference.stack_name).stacks[reference.stack_name]
+						resource_state = referenced_stack_state.find_resource_with_name_and_type(
+							name=reference.resource_name,
+							type_=reference.resource_type)
+						value_being_pointed_to = resource_state.resource_outputs[reference.property_name]
+						transformed_properties[property_name] = value_being_pointed_to
+					else:
+						transformed_properties[property_name] = property_value
+				new_resource = resource.target_class(resource.resource_name, **transformed_properties)
+				resource_map[(resource.target_class, resource.resource_name)] = new_resource
+
+		self._program_executor.bring_up(new_target, component.name)
+		pulumi_state = self._pulumi_state_loader.load_pulumi_state(component.name)
+		materializer = PulumiResourceMaterializer(pulumi_state)
+		def reconstruct_stack_component(creation_info: StackComponentConstructionInfo) -> StackComponent:
+			component = StackComponent(name=creation_info.name)
+			for resource_info in creation_info.created_resources:
+				reconstructed_resource = materializer.materialize_resource(creation_info.name, resource_info.resource_name, resource_info.target_class)
+				component.add_resource(reconstructed_resource)
+			return component
+		for provisioner in component.provisioners:
+			provisioner(reconstruct_stack_component(component))
+
 
 class ProgramRunner:
 	def __init__(self,
@@ -180,43 +221,11 @@ class ProgramRunner:
 		component_lifecycle_handler = _ComponentLifecycleHandler(
 			working_state=loaded_state,
 			state_manager=self._state_manager,
-			program_executor=self._program_executor)
+			program_executor=self._program_executor,
+			pulumi_state_loader=self._pulumi_state_loader)
 		result = _chart_program(target_program)
 		component_lifecycle_handler.handle_component_cleanup(result.stack_components)
 		for stack_component in result.stack_components:
 			loaded_state.managed_stacks.append(ManagedStack(name=stack_component.name))
-			def new_target():
-				resource_map: dict[tuple[type[Resource], str], Resource] = dict()
-				for resource in stack_component.created_resources:
-					transformed_properties = {}
-					for property_name, property_value in resource.properties.items():
-						if type(property_value) is RequiredOutput:
-							resource_with_output = resource_map.get((property_value.target_class, property_value.resource_name))
-							output = getattr(resource_with_output, property_value.attribute_name)
-							assert type(output) is pulumi.Output
-							transformed_properties[property_name] = output
-						elif type(property_value) is StackComponentValueReference:
-							reference: StackComponentValueReference = property_value
-							referenced_stack_state = self._pulumi_state_loader.load_pulumi_state(reference.stack_name).stacks[reference.stack_name]
-							resource_state = referenced_stack_state.find_resource_with_name_and_type(
-								name=reference.resource_name,
-								type_=reference.resource_type)
-							value_being_pointed_to = resource_state.resource_outputs[reference.property_name]
-							transformed_properties[property_name] = value_being_pointed_to
-						else:
-							transformed_properties[property_name] = property_value
-					new_resource = resource.target_class(resource.resource_name, **transformed_properties)
-					resource_map[(resource.target_class, resource.resource_name)] = new_resource
-				# 	resource = resource
-			self._program_executor.bring_up(new_target, stack_component.name)
-			pulumi_state = self._pulumi_state_loader.load_pulumi_state(stack_component.name)
-			materializer = PulumiResourceMaterializer(pulumi_state)
-			def reconstruct_stack_component(creation_info: StackComponentConstructionInfo) -> StackComponent:
-				component = StackComponent(name=creation_info.name)
-				for resource_info in creation_info.created_resources:
-					reconstructed_resource = materializer.materialize_resource(creation_info.name, resource_info.resource_name, resource_info.target_class)
-					component.add_resource(reconstructed_resource)
-				return component
-			for provisioner in stack_component.provisioners:
-				provisioner(reconstruct_stack_component(stack_component))
+			component_lifecycle_handler.handle_component_lifecycle(stack_component)
 		self._state_manager.save_state(loaded_state)
