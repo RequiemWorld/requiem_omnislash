@@ -1,6 +1,7 @@
 import abc
 import copy
 import json
+import typing
 import pulumi
 from pulumi import Resource
 from typing import Callable
@@ -140,6 +141,45 @@ class FakeSuperStateManager(SuperStateManager):
 		assert self._failed_to_load_at_least_once
 
 
+class _ResourceCreator:
+	"""
+	Handles the resource creation for resources on one stack, keeping
+	track of created resources and resolving outputs and references to other stacks.
+	"""
+	def __init__(self, pulumi_state_loader: PulumiStateLoader):
+		self._resource_map: dict[tuple[type[Resource], str], Resource] = dict()
+		self._pulumi_state_loader = pulumi_state_loader
+
+	def _resolve_required_output_value(self, required_output: RequiredOutput) -> typing.Any:  # probably pulumi.Output
+		resource_with_output = self._resource_map.get((required_output.target_class, required_output.resource_name))
+		output = getattr(resource_with_output, required_output.attribute_name)
+		assert type(output) is pulumi.Output
+		return output
+
+	def _resolve_stack_reference_value(self, reference: StackComponentValueReference) -> typing.Any:
+		stacks = self._pulumi_state_loader.load_pulumi_state(reference.stack_name).stacks
+		referenced_stack_state = stacks[reference.stack_name]
+		resource_state = referenced_stack_state.find_resource_with_name_and_type(
+			name=reference.resource_name,
+			type_=reference.resource_type)
+		value_being_pointed_to = resource_state.resource_outputs[reference.property_name]
+		return value_being_pointed_to
+
+	def create_resource(self, creation_info: InterceptedCreationInfo):
+		construction_kwargs = {}
+		for property_name, property_value in creation_info.properties.items():
+			if type(property_value) is RequiredOutput:
+				resolved_value = self._resolve_required_output_value(property_value)
+				construction_kwargs[property_name] = resolved_value
+			elif type(property_value) is StackComponentValueReference:
+				resolved_value = self._resolve_stack_reference_value(property_value)
+				construction_kwargs[property_name] = resolved_value
+			else:
+				construction_kwargs[property_name] = property_value
+		new_resource = creation_info.target_class(creation_info.resource_name, **construction_kwargs)
+		self._resource_map[(creation_info.target_class, creation_info.resource_name)] = new_resource
+
+
 class _ComponentLifecycleHandler:
 	def __init__(self,
 				 working_state: SuperState,
@@ -167,29 +207,9 @@ class _ComponentLifecycleHandler:
 
 	def handle_component_lifecycle(self, component: StackComponentConstructionInfo) -> None:
 		def new_target():
-			resource_map: dict[tuple[type[Resource], str], Resource] = dict()
-			for resource in component.created_resources:
-				transformed_properties = {}
-				for property_name, property_value in resource.properties.items():
-					if type(property_value) is RequiredOutput:
-						resource_with_output = resource_map.get(
-							(property_value.target_class, property_value.resource_name))
-						output = getattr(resource_with_output, property_value.attribute_name)
-						assert type(output) is pulumi.Output
-						transformed_properties[property_name] = output
-					elif type(property_value) is StackComponentValueReference:
-						reference: StackComponentValueReference = property_value
-						referenced_stack_state = \
-						self._pulumi_state_loader.load_pulumi_state(reference.stack_name).stacks[reference.stack_name]
-						resource_state = referenced_stack_state.find_resource_with_name_and_type(
-							name=reference.resource_name,
-							type_=reference.resource_type)
-						value_being_pointed_to = resource_state.resource_outputs[reference.property_name]
-						transformed_properties[property_name] = value_being_pointed_to
-					else:
-						transformed_properties[property_name] = property_value
-				new_resource = resource.target_class(resource.resource_name, **transformed_properties)
-				resource_map[(resource.target_class, resource.resource_name)] = new_resource
+			resource_creator = _ResourceCreator(self._pulumi_state_loader)
+			for resource_creation_info in component.created_resources:
+				resource_creator.create_resource(resource_creation_info)
 
 		self._program_executor.bring_up(new_target, component.name)
 		pulumi_state = self._pulumi_state_loader.load_pulumi_state(component.name)
