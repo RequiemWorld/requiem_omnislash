@@ -45,7 +45,6 @@ class MatchingResourceNotFound(StackComponentError):
 
 class StackComponent:
 	_created_stack_components: list["StackComponent"] = list()
-	_resource_construction_info: list["ResourceConstructionInfo"] = list()
 	def __init__(self, name: str):
 		self.name = name
 		self._created_stack_components.append(self)
